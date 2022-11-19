@@ -17,7 +17,7 @@
 #include "tqt.hpp"
 
 class Tile;
-struct Instance; // defined in map-objects.hpp
+struct Instance; // will be defined in Part 2
 
 class Cell {
 public:
@@ -59,7 +59,7 @@ public:
     class Tile &tile (int id);
 
     //! initialize the textures for the cell
-    void initTextures (class View *view);
+    void initTextures (class Window *win);
 
     //! load any objects that are in the cell
     void loadObjects ();
@@ -87,9 +87,8 @@ private:
                                 //! not present)
     std::vector<Instance *> _objects; //!< the objects (if any) that are on this map cell
 
-/** HINT: you will probably want to add additional fields and methods to this class to
- ** support maintaining the mesh frontier and to keep track of information needed to
- ** render the mesh, such as the VAO for chunks that are currently being rendered.
+/** HINT: you will probably want to add additional methods to this class to
+ ** support visibility testing and rendering
  **/
 };
 
@@ -181,6 +180,11 @@ class Tile {
     struct Chunk _chunk;        //!< mesh data for this tile
     cs237::AABBd _bbox;         //!< the tile's bounding box in world coordinates; note that we use
                                 //!  double precision here so that we can support large maps
+
+/** HINT: you will probably want to add additional fields and methods to this class to
+ ** support maintaining the mesh frontier and to keep track of information needed to
+ ** render the mesh, such as the VAO for chunks that are currently being rendered.
+ **/
 
   //! initialize the _cell, _id, etc. fields of this tile and its descendants.  The chunk and
   //! bounding box get set later
