@@ -1,10 +1,10 @@
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{Matrix4, Perspective3, Point3, Vector3};
+use nalgebra::{Matrix4, OPoint, Perspective3, Point3, Vector3};
 
 use crate::app::vs;
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod)]
 pub struct Camera {
     pub pos: Point3<f64>,
     pub target: Point3<f64>,
@@ -17,7 +17,27 @@ pub struct Camera {
     pub width: i64,
 }
 
+impl Default for Camera {
+    fn default() -> Self {
+        Camera {
+            pos: Point3::new(500.0, 50.0, 500.0),
+            target: -OPoint::origin() + Vector3::z(),
+            up: -Vector3::y(),
+            near_z: 0.1,
+            far_z: 10000.0,
+            asepect_ratio: 16.0 / 9.0,
+            fov: 60.0,
+            error_factor: 0.1,
+            width: 200,
+        }
+    }
+}
+
 impl Camera {
+    pub fn reset(&mut self) {
+        *self = Camera::default();
+    }
+
     pub fn situate(&mut self, p: Point3<f64>) -> Vector3<f64> {
         p - self.pos
     }
@@ -28,7 +48,7 @@ impl Camera {
     }
 
     pub const fn angle_d(&self) -> f64 {
-        10.0
+        50.0
     }
 
     pub fn view_transform(&self) -> Matrix4<f64> {
@@ -138,18 +158,27 @@ impl Camera {
     }
 
     pub fn rotate_ccw_horizontally(&mut self) {
-        self.move_by(self.angle_d() * self.right());
+        self.target += self.angle_d() * self.right();
     }
     pub fn rotate_cw_horizontally(&mut self) {
-        self.move_by(-self.angle_d() * self.right());
+        self.target -= self.angle_d() * self.right();
     }
 
     pub fn rotate_ccw_vertically(&mut self) {
-        //self.up += self.angle_d() * self.front();
         self.target += self.angle_d() * self.up();
+        self.up = self.right().cross(&self.front());
     }
     pub fn rotate_cw_vertically(&mut self) {
-        //self.up -= self.angle_d() * self.front();
         self.target -= self.angle_d() * self.up();
+        self.up = self.right().cross(&self.front()).normalize();
+    }
+
+    pub fn rotate_ccw_sideways(&mut self) {
+        let rot = nalgebra::Rotation3::new(-self.front() * self.angle_d().to_radians() * 0.2);
+        self.up = (rot * self.up).normalize();
+    }
+    pub fn rotate_cw_sideways(&mut self) {
+        let rot = nalgebra::Rotation3::new(self.front() * self.angle_d().to_radians() * 0.2);
+        self.up = (rot * self.up).normalize();
     }
 }

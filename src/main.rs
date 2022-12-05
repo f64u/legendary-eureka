@@ -8,18 +8,18 @@ mod disk_util;
 mod map;
 mod quadtree;
 mod texture_quadtree;
-mod vulkan_state;
+mod window_state;
 
 use app::{App, SwapchainState};
-use vulkan_state::WindowState;
 use vulkano::{
     instance::debug::{DebugUtilsMessenger, DebugUtilsMessengerCreateInfo},
     sync::GpuFuture,
 };
+use window_state::WindowState;
 
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::ControlFlow,
     window::Window,
 };
 
@@ -38,8 +38,7 @@ mod util {
 fn main() {
     let map = util::get_map();
 
-    let event_loop = EventLoop::new();
-    let window_state = WindowState::create(map.info.name.clone(), &event_loop);
+    let (window_state, event_loop) = WindowState::create(map.info.name.clone());
 
     let mut app = App::new(window_state, map);
 
@@ -83,16 +82,19 @@ fn main() {
         } => {
             let keycode = virtual_keycode.unwrap();
             match keycode {
-                VirtualKeyCode::Up => app.camera.move_up(),
-                VirtualKeyCode::Down => app.camera.move_down(),
-                VirtualKeyCode::Left => app.camera.move_left(),
-                VirtualKeyCode::Right => app.camera.move_right(),
+                VirtualKeyCode::W => app.camera.move_up(),
+                VirtualKeyCode::A => app.camera.move_left(),
+                VirtualKeyCode::S => app.camera.move_down(),
+                VirtualKeyCode::D => app.camera.move_right(),
                 VirtualKeyCode::L => app.camera.rotate_ccw_horizontally(),
                 VirtualKeyCode::H => app.camera.rotate_cw_horizontally(),
                 VirtualKeyCode::J => app.camera.rotate_cw_vertically(),
                 VirtualKeyCode::K => app.camera.rotate_ccw_vertically(),
+                VirtualKeyCode::U => app.camera.rotate_ccw_sideways(),
+                VirtualKeyCode::I => app.camera.rotate_cw_sideways(),
                 VirtualKeyCode::Equals => app.camera.move_forward(),
                 VirtualKeyCode::Minus => app.camera.move_backward(),
+                VirtualKeyCode::O => app.camera.reset(),
                 VirtualKeyCode::Q => *control_flow = ControlFlow::Exit,
                 _k => {}
             }

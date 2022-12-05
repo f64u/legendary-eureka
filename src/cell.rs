@@ -45,7 +45,7 @@ impl CellHeader {
 pub struct Cell {
     pub position: (u32, u32),
     pub depth: u32,
-    pub levels: Vec<QuadTree<tile::Tile>>,
+    pub lod: QuadTree<tile::Tile>,
     pub color_tqt: Option<TexturedQuadTree>,
     pub normal_tqt: Option<TexturedQuadTree>,
 
@@ -96,15 +96,12 @@ impl Cell {
             read_value(&mut reader, &mut offsets[i], "Unable to read offset")?;
         }
 
-        let mut levels = Vec::with_capacity(depth as usize);
-        for level in 0..depth {
-            levels.push(QuadTree::read_from(&mut reader, level, &offsets)?);
-        }
+        let lod = QuadTree::read_from(&mut reader, depth, &offsets)?;
 
         Ok(Self {
             position,
             depth,
-            levels,
+            lod,
             color_tqt,
             normal_tqt,
             worldly_width: None,
@@ -120,10 +117,8 @@ impl Cell {
 
         let pos = self.corner_world_position();
 
-        for tree in self.levels.iter_mut() {
-            for tile in tree.mut_view() {
-                tile.put_in_map_in_cell(pos, map)
-            }
+        for tile in self.lod.mut_view() {
+            tile.put_in_map_in_cell(pos, map)
         }
     }
 
@@ -148,12 +143,15 @@ pub mod tile {
     use crate::{
         aabb::AABB,
         map::Map,
-        quadtree::{util::node_index, QuadTree},
+        quadtree::{
+            util::{full_size, node_index},
+            QuadTree,
+        },
     };
 
     use super::chunk::Chunk;
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Tile {
         pub chunk: Chunk,
         pub position: (u32, u32),
@@ -191,28 +189,32 @@ pub mod tile {
     impl QuadTree<Tile> {
         pub fn read_from<R: Read + Seek>(
             reader: &mut BufReader<R>,
-            level: u32,
+            depth: u32,
             offsets: &[u64],
         ) -> Result<Self, &'static str> {
-            let n = 2usize.pow(level);
+            let mut tiles = Vec::with_capacity(full_size(depth) as usize);
 
-            let mut tiles = Vec::with_capacity(n * n);
+            for level in 0..depth {
+                let n = 2usize.pow(level);
 
-            for row in 0..n as u32 {
-                for col in 0..n as u32 {
-                    let chunk =
-                        Chunk::read_from(reader, offsets[node_index(level, row, col) as usize])?;
+                for row in 0..n as u32 {
+                    for col in 0..n as u32 {
+                        let chunk = Chunk::read_from(
+                            reader,
+                            offsets[node_index(level, row, col) as usize],
+                        )?;
 
-                    tiles.push(Tile {
-                        chunk,
-                        position: (row, col),
-                        level,
-                        bbox: None,
-                    });
+                        tiles.push(Tile {
+                            chunk,
+                            position: (row, col),
+                            level,
+                            bbox: None,
+                        });
+                    }
                 }
             }
 
-            Ok(QuadTree::build_tree(tiles, level))
+            Ok(QuadTree::build_complete_tree(tiles, depth))
         }
     }
 }
@@ -293,7 +295,7 @@ pub mod chunk {
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Chunk {
         pub max_error: f32,
         pub min_y: i16,

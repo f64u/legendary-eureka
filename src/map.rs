@@ -191,6 +191,6 @@ mod test {
     #[test]
     fn testing() {
         let m1 = Map::new("maps/test-map2/map.json").unwrap();
-        println!("{:?}", m1.cells[0][0].levels[0][0].chunk)
+        println!("{:?}", m1.cells[0][0].lod.items_at_level(0)[0].chunk)
     }
 }

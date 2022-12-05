@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use nalgebra::{Point3, Vector3};
+use nalgebra::{OPoint, Point3, Vector3};
 
 use vulkano::{
     buffer::{BufferUsage, CpuAccessibleBuffer, TypedBufferAccess},
@@ -16,6 +16,7 @@ use vulkano::{
     pipeline::{
         graphics::{
             input_assembly::{InputAssemblyState, PrimitiveTopology},
+            rasterization::{PolygonMode, RasterizationState},
             vertex_input::BuffersDefinition,
             viewport::{Viewport, ViewportState},
         },
@@ -30,7 +31,7 @@ use vulkano::{
 };
 use winit::window::Window;
 
-use crate::{camera::Camera, cell::chunk::HFVertex, map::Map, vulkan_state::WindowState};
+use crate::{camera::Camera, cell::chunk::HFVertex, map::Map, window_state::WindowState};
 
 pub(crate) mod vs {
     vulkano_shaders::shader! {
@@ -104,7 +105,7 @@ pub enum SwapchainState {
 
 impl App {
     pub fn new(window_state: WindowState, map: Map) -> Self {
-        let chunk = &map.cells[0][0].levels[0][0].chunk;
+        let chunk = &map.cells[0][0].lod.items_at_level(0)[0].chunk;
 
         let memory_allocator = StandardMemoryAllocator::new_default(window_state.device.clone());
 
@@ -130,17 +131,7 @@ impl App {
         )
         .unwrap();
 
-        let camera = Camera {
-            pos: Point3::new(0.0, 13.0, 0.0),
-            target: Point3::new(0.0, 0.0, 0.0),
-            up: -Vector3::z(),
-            near_z: 0.1,
-            far_z: 1000.0,
-            asepect_ratio: 16.0 / 9.0,
-            fov: 60.0,
-            error_factor: 0.1,
-            width: 200,
-        };
+        let camera = Camera::default();
 
         let world_uniform_buffer = CpuAccessibleBuffer::from_data(
             &memory_allocator,
@@ -203,6 +194,10 @@ impl App {
                 topology: vulkano::pipeline::PartialStateMode::Fixed(
                     PrimitiveTopology::TriangleStrip,
                 ),
+                ..Default::default()
+            })
+            .rasterization_state(RasterizationState {
+                polygon_mode: PolygonMode::Line,
                 ..Default::default()
             })
             .build(window_state.device.clone())

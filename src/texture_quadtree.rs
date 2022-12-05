@@ -7,7 +7,7 @@ use std::{
 use crate::quadtree::{util::full_size, QuadTree};
 use crate::{disk_util::read_value, quadtree::util::node_index};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Tile {
     pub image: Vec<u8>,
 }
@@ -68,7 +68,7 @@ impl Header {
 
 #[derive(Debug)]
 pub struct TexturedQuadTree {
-    pub levels: Vec<QuadTree<Tile>>,
+    pub lod: QuadTree<Tile>,
     pub depth: u32,
     pub tile_size: u32,
 }
@@ -76,24 +76,26 @@ pub struct TexturedQuadTree {
 impl QuadTree<Tile> {
     fn read_from<R: Read + Seek>(
         reader: &mut BufReader<R>,
-        level: u32,
+        depth: u32,
         tile_size: u32,
         offsets: &[u64],
     ) -> Result<Self, &'static str> {
-        let n = 2usize.pow(level);
-        let mut tiles = Vec::with_capacity(n * n);
+        let mut tiles = Vec::with_capacity(full_size(depth) as usize);
 
-        for row in 0..n as u32 {
-            for col in 0..n as u32 {
-                tiles.push(Tile::read_from(
-                    reader,
-                    tile_size,
-                    offsets[node_index(level, row, col) as usize],
-                )?)
+        for level in 0..depth {
+            let n = 2usize.pow(level);
+            for row in 0..n as u32 {
+                for col in 0..n as u32 {
+                    tiles.push(Tile::read_from(
+                        reader,
+                        tile_size,
+                        offsets[node_index(level, row, col) as usize],
+                    )?)
+                }
             }
         }
 
-        Ok(QuadTree::build_tree(tiles, level))
+        Ok(QuadTree::build_complete_tree(tiles, depth))
     }
 }
 
@@ -127,18 +129,10 @@ impl TexturedQuadTree {
             read_value(&mut reader, &mut offsets[i], "Unable to read offset")?;
         }
 
-        let mut levels = Vec::with_capacity(depth as usize);
-        for level in 0..depth {
-            levels.push(QuadTree::<Tile>::read_from(
-                &mut reader,
-                level,
-                tile_size,
-                &offsets,
-            )?);
-        }
+        let lod = QuadTree::<Tile>::read_from(&mut reader, depth, tile_size, &offsets)?;
 
         Ok(Self {
-            levels,
+            lod,
             depth,
             tile_size,
         })
@@ -157,7 +151,7 @@ mod test {
             TexturedQuadTree::new("maps/test-map2/00_00/color.tqt").unwrap(),
             TexturedQuadTree::new("maps/test-map2/00_00/norm.tqt").unwrap(),
         ] {
-            let n = tqt.levels.len();
+            let n = tqt.lod.depth();
             println!("{n:?}")
         }
     }

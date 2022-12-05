@@ -3,7 +3,7 @@ use std::ops::AddAssign;
 use nalgebra::Vector3;
 use num_traits::Float;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AABB<T: Float> {
     pub min: Vector3<T>,
     pub max: Vector3<T>,

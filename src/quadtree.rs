@@ -1,65 +1,68 @@
 use std::ops::Index;
 
 #[derive(Debug)]
-pub enum QuadTree<T> {
-    Element(T),
-    Quadrant(Box<Quadrant<T>>),
+pub enum QuadTree<T>
+where
+    T: Clone,
+{
+    Leaf(T),
+    Node(T, Box<Children<T>>),
 }
 
 #[derive(Debug)]
-pub struct Quadrant<T> {
+pub struct Children<T>
+where
+    T: Clone,
+{
     pub nw: QuadTree<T>,
     pub ne: QuadTree<T>,
     pub se: QuadTree<T>,
     pub sw: QuadTree<T>,
 
-    depth: u32,
+    depth_of_child: u32,
 }
 
-impl<T> QuadTree<T> {
-    pub fn build_tree(mut elements: Vec<T>, depth: u32) -> QuadTree<T> {
-        let n = 4usize.pow(depth);
-
+impl<T: Clone> QuadTree<T> {
+    pub fn build_complete_tree(elements: Vec<T>, depth: u32) -> Self {
+        let n = util::full_size(depth) as usize;
         assert_eq!(elements.len(), n);
 
-        if depth == 0 {
-            let elem = elements.pop();
-            return QuadTree::Element(elem.unwrap());
+        Self::build_node(&elements, 0, 0, depth)
+    }
+
+    fn build_node(all_elements: &[T], index: usize, level: u32, depth: u32) -> Self {
+        if level == depth - 1 {
+            return Self::Leaf(all_elements[index].clone());
         }
 
-        let mut south = elements.split_off(n / 2);
-        let mut north = elements;
-
-        let ne = north.split_off(n / 4);
-        let nw = north;
-
-        let sw = south.split_off(n / 4);
-        let se = south;
-
-        QuadTree::Quadrant(Box::new(Quadrant {
-            nw: Self::build_tree(nw, depth - 1),
-            ne: Self::build_tree(ne, depth - 1),
-            se: Self::build_tree(se, depth - 1),
-            sw: Self::build_tree(sw, depth - 1),
-            depth,
-        }))
+        let children_index = index << 2;
+        Self::Node(
+            all_elements[index].clone(),
+            Box::new(Children {
+                nw: Self::build_node(all_elements, children_index + 1, level + 1, depth),
+                ne: Self::build_node(all_elements, children_index + 2, level + 1, depth),
+                se: Self::build_node(all_elements, children_index + 3, level + 1, depth),
+                sw: Self::build_node(all_elements, children_index + 4, level + 1, depth),
+                depth_of_child: depth - level - 1,
+            }),
+        )
     }
 
     pub fn depth(&self) -> u32 {
         match self {
-            QuadTree::Element(_) => 0,
-            QuadTree::Quadrant(q) => q.depth,
+            QuadTree::Leaf(_) => 1,
+            QuadTree::Node(_, q) => q.depth_of_child + 1,
         }
     }
 
     pub fn mut_view(&mut self) -> Vec<&mut T> {
         let mut flattened = Vec::with_capacity(util::full_size(self.depth()) as usize);
         match self {
-            QuadTree::Element(v) => {
+            QuadTree::Leaf(v) => {
                 flattened.push(v);
             }
-            QuadTree::Quadrant(q) => {
-                let Quadrant { nw, ne, se, sw, .. } = q.as_mut();
+            QuadTree::Node(_, q) => {
+                let Children { nw, ne, se, sw, .. } = q.as_mut();
                 for t in [nw, ne, se, sw] {
                     flattened.extend(t.mut_view());
                 }
@@ -67,87 +70,40 @@ impl<T> QuadTree<T> {
         }
         flattened
     }
-}
 
-impl<T> Index<usize> for QuadTree<T> {
-    type Output = T;
+    pub fn items_at_level(&self, level: u32) -> Vec<&T> {
+        let mut items = Vec::with_capacity(4usize.pow(level));
 
-    fn index(&self, flat_id: usize) -> &Self::Output {
         match self {
-            QuadTree::Element(v) => {
-                if flat_id != 0 {
-                    panic!("ID out of bound");
+            QuadTree::Leaf(e) => {
+                if level != 0 {
+                    panic!("The only available level is 0")
                 }
-                v
+                items.push(e)
             }
 
-            QuadTree::Quadrant(boxed_quadrant) => {
-                let Quadrant {
-                    nw,
-                    ne,
-                    se,
-                    sw,
-                    depth,
-                } = &**boxed_quadrant;
-
-                let n = 4usize.pow(*depth - 1);
-
-                if flat_id < n {
-                    &nw[flat_id]
-                } else if flat_id >= n && flat_id < 2 * n {
-                    &ne[flat_id - n]
-                } else if flat_id >= 2 * n && flat_id < 3 * n {
-                    &se[flat_id - 2 * n]
-                } else if flat_id >= 3 * n && flat_id < 4 * n {
-                    &sw[flat_id - 3 * n]
+            QuadTree::Node(e, boxed_children) => {
+                if level == 0 {
+                    items.push(e)
                 } else {
-                    panic!("ID out of bound")
+                    let Children { nw, ne, se, sw, .. } = &**boxed_children;
+                    items.extend(
+                        [nw, ne, se, sw]
+                            .map(|q| q.items_at_level(level - 1))
+                            .into_iter()
+                            .flatten(),
+                    )
                 }
             }
         }
+
+        items
     }
-}
 
-impl<T> Index<(usize, usize)> for QuadTree<T> {
-    type Output = T;
-
-    fn index(&self, index: (usize, usize)) -> &Self::Output {
+    pub fn unwrap(&self) -> &T {
         match self {
-            QuadTree::Element(_) => {
-                panic!("Cannot index into element")
-            }
-
-            QuadTree::Quadrant(boxed_quadrant) => {
-                let Quadrant {
-                    nw,
-                    ne,
-                    se,
-                    sw,
-                    depth,
-                } = &**boxed_quadrant;
-
-                if depth == &1 {
-                    &(match index {
-                        (0, 0) => nw,
-                        (0, 1) => ne,
-                        (1, 1) => se,
-                        (1, 0) => sw,
-                        _ => panic!("Index out of bounds"),
-                    })[0]
-                } else {
-                    let half_width = 2usize.pow(*depth - 1);
-
-                    if index.0 < half_width && index.1 < half_width {
-                        &nw[index]
-                    } else if index.0 < half_width && index.1 >= half_width {
-                        &ne[(index.0, index.1 - half_width)]
-                    } else if index.0 >= half_width && index.1 >= half_width {
-                        &se[(index.0 - half_width, index.1 - half_width)]
-                    } else {
-                        &sw[(index.0 - half_width, index.1)]
-                    }
-                }
-            }
+            QuadTree::Leaf(e) => e,
+            QuadTree::Node(e, _) => e,
         }
     }
 }
@@ -167,69 +123,22 @@ mod test {
     use super::QuadTree;
 
     #[test]
-    fn one_level_indexing() {
-        let q = QuadTree::build_tree((0..4).collect(), 1);
-        assert_eq!(q[(0, 0)], 0);
-        assert_eq!(q[(0, 1)], 1);
-        assert_eq!(q[(1, 1)], 2);
-        assert_eq!(q[(1, 0)], 3);
+    fn tree_makes_sense_three_levels() {
+        let q = QuadTree::build_complete_tree((0..21).collect(), 3);
+        println!("{q:?}");
     }
 
     #[test]
-    fn two_level_indexing() {
-        let cycle = vec![0, 1, 5, 4, 2, 3, 7, 6, 10, 11, 15, 14, 8, 9, 13, 12];
-
-        let q = QuadTree::build_tree(cycle, 2);
-
-        for row in 0..4 {
-            for col in 0..4 {
-                assert_eq!(q[(row, col)], row * 4 + col);
-            }
-        }
-    }
-
-    #[test]
-    fn one_level_atting() {
-        let q = QuadTree::build_tree((0..4).collect(), 1);
-        assert_eq!(q[0], 0);
-        assert_eq!(q[1], 1);
-        assert_eq!(q[2], 2);
-        assert_eq!(q[3], 3);
-    }
-
-    #[test]
-    fn two_level_atting() {
-        let q = QuadTree::build_tree((0..16).collect(), 2);
-        for i in 0..16 {
-            assert_eq!(q[i], i);
-        }
-    }
-
-    #[test]
-    fn up_to_10_level_atting() {
-        for depth in 1..=10 {
-            let q = QuadTree::build_tree((0..(4usize.pow(depth))).collect(), depth);
-            for i in 0..(4usize.pow(depth)) {
-                assert_eq!(q[i], i);
-            }
-        }
-    }
-
-    #[test]
-    fn flattened_view_one_level() {
-        let mut t = QuadTree::build_tree((0..4).collect(), 1);
-        assert_eq!(t.mut_view(), vec![&mut 0, &mut 1, &mut 2, &mut 3])
-    }
-
-    #[test]
-    fn flattened_view_two_level() {
-        let mut t = QuadTree::build_tree((0..16).collect(), 2);
+    fn at_level() {
+        let q = QuadTree::build_complete_tree((0..21).collect(), 3);
+        assert_eq!(q.items_at_level(0), vec![&0]);
+        assert_eq!(q.items_at_level(1), vec![&1, &2, &3, &4]);
         assert_eq!(
-            t.mut_view(),
-            (0..16)
-                .collect::<Vec::<i32>>()
-                .iter_mut()
-                .collect::<Vec::<&mut i32>>()
-        )
+            q.items_at_level(2)
+                .into_iter()
+                .map(|i| *i)
+                .collect::<Vec<_>>(),
+            (5..21).collect::<Vec<_>>()
+        );
     }
 }

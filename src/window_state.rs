@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use vulkano::{
     device::{
-        physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, Queue,
+        physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, Features, Queue,
         QueueCreateInfo, QueueFlags,
     },
     image::{ImageUsage, SwapchainImage},
@@ -90,6 +90,10 @@ impl WindowState {
         let (device, mut queues) = Device::new(
             physical_device,
             DeviceCreateInfo {
+                enabled_features: Features {
+                    fill_mode_non_solid: true,
+                    ..Default::default()
+                },
                 enabled_extensions: device_extensions,
                 queue_create_infos: vec![QueueCreateInfo {
                     queue_family_index,
@@ -146,19 +150,23 @@ impl WindowState {
         .unwrap()
     }
 
-    pub fn create(title: String, event_loop: &EventLoop<()>) -> Self {
+    pub fn create(title: String) -> (Self, EventLoop<()>) {
+        let event_loop = EventLoop::new();
         let instance = Self::create_vulkan_instance();
         let surface = Self::create_surface(title, &event_loop, instance.clone());
         let (device, queue) = Self::get_device_and_queue(instance.clone(), surface.clone());
         let (swapchain, images) = Self::create_swapchain(device.clone(), surface.clone());
 
-        Self {
-            instance,
-            device,
-            queue,
-            surface,
-            swapchain,
-            swapchain_images: images,
-        }
+        (
+            Self {
+                instance,
+                device,
+                queue,
+                surface,
+                swapchain,
+                swapchain_images: images,
+            },
+            event_loop,
+        )
     }
 }
