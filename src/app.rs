@@ -258,7 +258,7 @@ impl App {
         )
         .unwrap();
 
-        let situation = Situation::new(&memory_allocator, map.cells[0][0].lod.items_at_level(4));
+        let situation = Situation::new(&memory_allocator, map.cells[0][0].lod.items_at_level(0));
 
         Self {
             map,
@@ -364,7 +364,6 @@ impl App {
                 .draw_indexed(index_buffer.len() as u32, 1, 0, 0, 0)
                 .unwrap();
         }
-        builder.bind_pipeline_graphics(self.pipeline.clone());
         builder.end_render_pass().unwrap();
 
         let command_buffer = builder.build().unwrap();

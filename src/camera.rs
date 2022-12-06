@@ -3,6 +3,67 @@ use nalgebra::{Matrix4, OPoint, Perspective3, Point3, Vector3};
 
 use crate::app::vs;
 
+pub struct Plane {
+    normal: Vector3<f64>,
+    distance: f64,
+}
+
+pub struct Frustum {
+    pub top_face: Plane,
+    pub bottom_face: Plane,
+
+    pub left_face: Plane,
+    pub right_face: Plane,
+
+    pub near_face: Plane,
+    pub far_face: Plane,
+}
+
+impl Frustum {
+    fn new(camera: &Camera) -> Self {
+        let half_v_side = camera.far_z * (camera.fov.to_radians() * 0.5).tan();
+        let half_h_side = half_v_side * camera.asepect_ratio;
+        let front_mult_far = camera.far_z * camera.front();
+
+        let origin = Point3::new(0.0, 0.0, 0.0);
+        let distance = nalgebra::distance(&camera.pos, &origin);
+
+        Self {
+            near_face: Plane {
+                normal: camera.front(),
+                distance: nalgebra::distance(
+                    &(camera.pos + camera.near_z * camera.front()),
+                    &origin,
+                ),
+            },
+            far_face: Plane {
+                normal: -camera.front(),
+                distance: nalgebra::distance(&(camera.pos + front_mult_far), &origin),
+            },
+            right_face: Plane {
+                normal: camera
+                    .up()
+                    .cross(&(front_mult_far + camera.right() * half_h_side)),
+                distance,
+            },
+            left_face: Plane {
+                normal: (front_mult_far - camera.right() * half_h_side).cross(&camera.up()),
+                distance,
+            },
+            top_face: Plane {
+                normal: camera
+                    .right()
+                    .cross(&(front_mult_far - camera.right() * half_v_side)),
+                distance,
+            },
+            bottom_face: Plane {
+                normal: (front_mult_far + camera.up() * half_v_side).cross(&camera.right()),
+                distance,
+            },
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Zeroable, Pod)]
 pub struct Camera {
@@ -21,7 +82,7 @@ impl Default for Camera {
     fn default() -> Self {
         Camera {
             pos: Point3::new(500.0, 50.0, 500.0),
-            target: -OPoint::origin() + Vector3::z(),
+            target: OPoint::origin() + -Vector3::z(),
             up: -Vector3::y(),
             near_z: 0.1,
             far_z: 10000.0,
@@ -34,6 +95,10 @@ impl Default for Camera {
 }
 
 impl Camera {
+    pub fn frustum(&self) -> Frustum {
+        Frustum::new(self)
+    }
+
     pub fn reset(&mut self) {
         *self = Camera::default();
     }

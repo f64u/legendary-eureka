@@ -101,7 +101,6 @@ fn main() {
 
             app.previous_frame_end.as_mut().unwrap().cleanup_finished();
             app.reupload_world_data();
-            println!("{:?}", app.camera);
         }
 
         Event::RedrawEventsCleared => {

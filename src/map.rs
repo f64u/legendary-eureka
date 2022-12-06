@@ -91,7 +91,7 @@ impl Map {
         for row in 0..abstract_size.0 {
             let mut cell_row = Vec::with_capacity(abstract_size.1 as usize);
             for col in 0..abstract_size.1 {
-                let idx = row * abstract_size.0 + col;
+                let idx = row * abstract_size.1 + col;
                 let grid_name = &info.grid[idx as usize];
                 let cell_dir = parent.join(grid_name);
                 let color_tqt = if info.has_color {
