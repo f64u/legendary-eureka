@@ -149,7 +149,7 @@ pub mod tile {
         },
     };
 
-    use super::chunk::Chunk;
+    use super::chunk::{Chunk, HFVertex};
 
     #[derive(Debug, Clone)]
     pub struct Tile {
@@ -231,12 +231,21 @@ pub mod chunk {
     #[derive(Clone, Copy, Debug, Default, Zeroable, Pod)]
     pub struct HFVertex {
         pub position: [f32; 3],
+        pub color: [f32; 3],
         pub morph_delta: f32,
     }
 
-    impl_vertex!(HFVertex, position, morph_delta);
+    impl_vertex!(HFVertex, position, color, morph_delta);
 
     impl HFVertex {
+        pub fn with_color(&self, color: [f32; 3]) -> Self {
+            Self {
+                position: self.position,
+                morph_delta: self.morph_delta,
+                color,
+            }
+        }
+
         fn read_from<R: Read>(reader: &mut BufReader<R>) -> Result<Self, &'static str> {
             let mut x = 0i16;
             let mut y = 0i16;
@@ -255,6 +264,7 @@ pub mod chunk {
             Ok(Self {
                 position: [x as f32, y as f32, z as f32],
                 morph_delta: morph_delta as f32,
+                color: [1.0, 0.0, 0.0],
             })
         }
     }

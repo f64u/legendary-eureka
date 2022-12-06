@@ -5,14 +5,15 @@ use nalgebra::{OPoint, Point3, Vector3};
 use vulkano::{
     buffer::{BufferUsage, CpuAccessibleBuffer, TypedBufferAccess},
     command_buffer::{
-        allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage,
-        RenderPassBeginInfo, SubpassContents,
+        allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder,
+        CommandBufferInheritanceInfo, CommandBufferUsage, RenderPassBeginInfo, RenderingInfo,
+        SubpassContents,
     },
     descriptor_set::{
         allocator::StandardDescriptorSetAllocator, PersistentDescriptorSet, WriteDescriptorSet,
     },
     image::{view::ImageView, ImageAccess, SwapchainImage},
-    memory::allocator::StandardMemoryAllocator,
+    memory::allocator::{FreeListAllocator, GenericMemoryAllocator, StandardMemoryAllocator},
     pipeline::{
         graphics::{
             input_assembly::{InputAssemblyState, PrimitiveTopology},
@@ -31,7 +32,12 @@ use vulkano::{
 };
 use winit::window::Window;
 
-use crate::{camera::Camera, cell::chunk::HFVertex, map::Map, window_state::WindowState};
+use crate::{
+    camera::Camera,
+    cell::{chunk::HFVertex, tile::Tile},
+    map::Map,
+    window_state::WindowState,
+};
 
 pub(crate) mod vs {
     vulkano_shaders::shader! {
@@ -40,7 +46,8 @@ pub(crate) mod vs {
         #version 460
 
         layout(location = 0) in vec3 position;
-        layout(location = 1) in float morph_delta;
+        layout(location = 1) in vec3 color;
+        layout(location = 2) in float morph_delta;
 
         layout(set = 0, binding = 0) uniform WorldObject {
             mat4 model;
@@ -52,7 +59,7 @@ pub(crate) mod vs {
 
         void main() {
             gl_Position = world.proj * world.view * world.model * vec4(position, 1.0);
-            v_color = vec3(1.0, 0.0, 0.0);
+            v_color = color;
         }
     ",
     types_meta: {
@@ -90,11 +97,75 @@ pub struct App {
     pub viewport: Viewport,
     pub command_buffer_allocator: StandardCommandBufferAllocator,
     pub descriptor_set_allocator: StandardDescriptorSetAllocator,
-    pub vertex_buffer: Arc<CpuAccessibleBuffer<[HFVertex]>>,
-    pub index_buffer: Arc<CpuAccessibleBuffer<[u16]>>,
     pub descriptor_set: Arc<PersistentDescriptorSet>,
     pub world_uniform_buffer: Arc<CpuAccessibleBuffer<vs::ty::WorldObject>>,
     pub camera: Camera,
+    pub situation: Situation,
+}
+
+pub struct Situation {
+    vertex_buffers: Vec<Arc<CpuAccessibleBuffer<[HFVertex]>>>,
+    index_buffers: Vec<Arc<CpuAccessibleBuffer<[u16]>>>,
+}
+
+impl Situation {
+    fn new(
+        memory_allocator: &GenericMemoryAllocator<Arc<FreeListAllocator>>,
+        tiles: Vec<&Tile>,
+    ) -> Self {
+        let chunks = tiles
+            .into_iter()
+            .map(|tile| &tile.chunk)
+            .collect::<Vec<_>>();
+
+        const COLORS: [[f32; 3]; 4] = [
+            [0.0, 1.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 1.0, 1.0],
+        ];
+
+        let vertex_buffers = chunks
+            .iter()
+            .enumerate()
+            .map(|(i, chunk)| {
+                CpuAccessibleBuffer::from_iter(
+                    memory_allocator,
+                    BufferUsage {
+                        vertex_buffer: true,
+                        ..Default::default()
+                    },
+                    false,
+                    chunk
+                        .vertices
+                        .iter()
+                        .map(move |v| v.with_color(COLORS[i % 4])),
+                )
+                .unwrap()
+            })
+            .collect();
+
+        let index_buffers = chunks
+            .iter()
+            .map(|chunk| {
+                CpuAccessibleBuffer::from_iter(
+                    memory_allocator,
+                    BufferUsage {
+                        index_buffer: true,
+                        ..Default::default()
+                    },
+                    false,
+                    chunk.indices.iter().copied(),
+                )
+                .unwrap()
+            })
+            .collect();
+
+        Self {
+            vertex_buffers,
+            index_buffers,
+        }
+    }
 }
 
 pub enum SwapchainState {
@@ -105,31 +176,7 @@ pub enum SwapchainState {
 
 impl App {
     pub fn new(window_state: WindowState, map: Map) -> Self {
-        let chunk = &map.cells[0][0].lod.items_at_level(0)[0].chunk;
-
         let memory_allocator = StandardMemoryAllocator::new_default(window_state.device.clone());
-
-        let vertex_buffer = CpuAccessibleBuffer::from_iter(
-            &memory_allocator,
-            BufferUsage {
-                vertex_buffer: true,
-                ..Default::default()
-            },
-            false,
-            chunk.vertices.iter().cloned(),
-        )
-        .unwrap();
-
-        let index_buffer = CpuAccessibleBuffer::from_iter(
-            &memory_allocator,
-            BufferUsage {
-                index_buffer: true,
-                ..Default::default()
-            },
-            false,
-            chunk.indices.iter().copied(),
-        )
-        .unwrap();
 
         let camera = Camera::default();
 
@@ -211,6 +258,8 @@ impl App {
         )
         .unwrap();
 
+        let situation = Situation::new(&memory_allocator, map.cells[0][0].lod.items_at_level(4));
+
         Self {
             map,
             window_state,
@@ -221,11 +270,10 @@ impl App {
             viewport,
             command_buffer_allocator,
             descriptor_set_allocator,
-            vertex_buffer,
-            index_buffer,
             descriptor_set,
             world_uniform_buffer,
             camera,
+            situation,
         }
     }
 
@@ -295,20 +343,29 @@ impl App {
                 SubpassContents::Inline,
             )
             .unwrap()
-            .set_viewport(0, [self.viewport.clone()])
             .bind_pipeline_graphics(self.pipeline.clone())
-            .bind_vertex_buffers(0, self.vertex_buffer.clone())
-            .bind_index_buffer(self.index_buffer.clone())
-            .bind_descriptor_sets(
-                PipelineBindPoint::Graphics,
-                self.pipeline.layout().clone(),
-                0,
-                self.descriptor_set.clone(),
-            )
-            .draw_indexed(self.index_buffer.len() as u32, 1, 0, 0, 0)
-            .unwrap()
-            .end_render_pass()
-            .unwrap();
+            .set_viewport(0, [self.viewport.clone()]);
+
+        for (vertex_buffer, index_buffer) in self
+            .situation
+            .vertex_buffers
+            .iter()
+            .zip(self.situation.index_buffers.iter())
+        {
+            builder
+                .bind_vertex_buffers(0, vertex_buffer.clone())
+                .bind_index_buffer(index_buffer.clone())
+                .bind_descriptor_sets(
+                    PipelineBindPoint::Graphics,
+                    self.pipeline.layout().clone(),
+                    0,
+                    self.descriptor_set.clone(),
+                )
+                .draw_indexed(index_buffer.len() as u32, 1, 0, 0, 0)
+                .unwrap();
+        }
+        builder.bind_pipeline_graphics(self.pipeline.clone());
+        builder.end_render_pass().unwrap();
 
         let command_buffer = builder.build().unwrap();
 
