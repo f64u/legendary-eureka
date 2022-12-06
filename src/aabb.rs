@@ -1,24 +1,58 @@
 use std::ops::AddAssign;
 
-use nalgebra::Vector3;
+use nalgebra::{Point3, Scalar, Vector3};
 use num_traits::Float;
 
 #[derive(Debug, Clone)]
-pub struct AABB<T: Float> {
-    pub min: Vector3<T>,
-    pub max: Vector3<T>,
+pub struct AABB<T: Float + Scalar> {
+    pub min: Point3<T>,
+    pub max: Point3<T>,
 }
 
 impl<T> AABB<T>
 where
     T: Float + Default + nalgebra::Scalar + nalgebra::ComplexField<RealField = T>,
 {
-    pub fn new(min: Vector3<T>, max: Vector3<T>) -> Self {
+    pub fn new(min: Point3<T>, max: Point3<T>) -> Self {
         Self { min, max }
     }
 
-    pub fn distance_to_point(&self, pt: Vector3<T>) -> T {
-        let mut d = Vector3::new(T::default(), T::default(), T::default());
+    pub fn get_vertex_p(&self, normal: Vector3<T>) -> Point3<T> {
+        let mut p = self.min;
+        if normal.x >= T::default() {
+            p.x = self.max.x;
+        }
+
+        if normal.y >= T::default() {
+            p.y = self.max.y;
+        }
+
+        if normal.z >= T::default() {
+            p.z = self.max.z;
+        }
+
+        p
+    }
+
+    pub fn get_vertex_n(&self, normal: Vector3<T>) -> Point3<T> {
+        let mut p = self.max;
+        if normal.x >= T::default() {
+            p.x = self.min.x;
+        }
+
+        if normal.y >= T::default() {
+            p.y = self.min.y;
+        }
+
+        if normal.z >= T::default() {
+            p.z = self.min.z;
+        }
+
+        p
+    }
+
+    pub fn distance_to_point(&self, pt: Point3<T>) -> T {
+        let mut d = Point3::new(T::default(), T::default(), T::default());
         for dim in 0..3 {
             d[dim] = if pt[dim] < self.min[dim] {
                 self.min[dim] - pt[dim]
@@ -29,10 +63,10 @@ where
             }
         }
 
-        d.magnitude()
+        d.coords.magnitude()
     }
 
-    pub fn add_pt(&mut self, pt: Vector3<T>) {
+    pub fn add_pt(&mut self, pt: Point3<T>) {
         if pt.x < self.min.x {
             self.min.x = pt.x;
         } else if pt.x > self.max.x {
@@ -52,12 +86,12 @@ where
         }
     }
 
-    pub fn center(&self) -> Vector3<T> {
-        (self.min + self.max).scale(T::from(0.5).unwrap())
+    pub fn center(&self) -> Point3<T> {
+        self.min + (self.max - self.min).scale(T::from(0.5).unwrap())
     }
 }
 
-impl<T: Float> AddAssign for AABB<T> {
+impl<T: Float + Scalar> AddAssign for AABB<T> {
     fn add_assign(&mut self, rhs: Self) {
         for dim in 0..3 {
             self.min[dim] = self.min[dim].min(rhs.min[dim]);
@@ -66,11 +100,11 @@ impl<T: Float> AddAssign for AABB<T> {
     }
 }
 
-impl<T> AddAssign<Vector3<T>> for AABB<T>
+impl<T> AddAssign<Point3<T>> for AABB<T>
 where
     T: Float + Default + nalgebra::Scalar + nalgebra::ComplexField<RealField = T>,
 {
-    fn add_assign(&mut self, rhs: Vector3<T>) {
+    fn add_assign(&mut self, rhs: Point3<T>) {
         self.add_pt(rhs)
     }
 }

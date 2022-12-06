@@ -4,7 +4,7 @@ use std::{
     path::Path,
 };
 
-use nalgebra::Vector3;
+use nalgebra::Point3;
 
 use crate::{
     disk_util::read_value,
@@ -41,7 +41,7 @@ impl CellHeader {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Cell {
     pub position: (u32, u32),
     pub depth: u32,
@@ -118,13 +118,13 @@ impl Cell {
         let pos = self.corner_world_position();
 
         for tile in self.lod.mut_view() {
-            tile.put_in_map_in_cell(pos, map)
+            tile.put_in_map_in_cell(pos, map);
         }
     }
 
-    pub fn corner_world_position(&self) -> Vector3<f64> {
+    pub fn corner_world_position(&self) -> Point3<f64> {
         match self.worldly_width {
-            Some(width) => Vector3::new(
+            Some(width) => Point3::new(
                 width * self.position.1 as f64,
                 0.0,
                 width * self.position.0 as f64,
@@ -138,7 +138,7 @@ impl Cell {
 pub mod tile {
     use std::io::{BufReader, Read, Seek};
 
-    use nalgebra::Vector3;
+    use nalgebra::{Point3, Vector3};
 
     use crate::{
         aabb::AABB,
@@ -149,7 +149,7 @@ pub mod tile {
         },
     };
 
-    use super::chunk::{Chunk, HFVertex};
+    use super::chunk::Chunk;
 
     #[derive(Debug, Clone)]
     pub struct Tile {
@@ -166,7 +166,7 @@ pub mod tile {
             self.bbox.is_some()
         }
 
-        pub fn put_in_map_in_cell(&mut self, cell_world_pos: Vector3<f64>, map: &Map) {
+        pub fn put_in_map_in_cell(&mut self, cell_world_pos: Point3<f64>, map: &Map) {
             let tile_nw_pos = cell_world_pos
                 + Vector3::new(
                     map.info.h_scale as f64 * self.position.1 as f64,

@@ -1,6 +1,6 @@
 use std::{fs::File, io::BufReader, path::Path, vec};
 
-use nalgebra::Vector3;
+use nalgebra::{Point3, Vector3};
 use serde::Deserialize;
 
 use crate::{cell::Cell, texture_quadtree::TexturedQuadTree};
@@ -57,16 +57,8 @@ pub struct Map {
 }
 
 impl Map {
-    pub fn new(map_path: impl AsRef<Path>) -> Result<Self, &'static str> {
-        if map_path.as_ref().file_name().unwrap() != "map.json" {
-            return Err("map_path has to be a map.json file");
-        }
-
-        let absolute = map_path
-            .as_ref()
-            .canonicalize()
-            .map_err(|_| "Unable to extract absolute path")?;
-        let parent = absolute.parent().unwrap();
+    pub fn new(map_dir: impl AsRef<Path>) -> Result<Self, &'static str> {
+        let map_path = map_dir.as_ref().join("map.json");
 
         let info_file = File::open(map_path).map_err(|_| "Unable to open map.json")?;
         let info_reader = BufReader::new(info_file);
@@ -93,7 +85,7 @@ impl Map {
             for col in 0..abstract_size.1 {
                 let idx = row * abstract_size.1 + col;
                 let grid_name = &info.grid[idx as usize];
-                let cell_dir = parent.join(grid_name);
+                let cell_dir = map_dir.as_ref().join(grid_name);
                 let color_tqt = if info.has_color {
                     Some(TexturedQuadTree::new(cell_dir.join("color.tqt"))?)
                 } else {
@@ -115,13 +107,29 @@ impl Map {
             cells.push(cell_row);
         }
 
-        Ok(Map {
+        let mut map = Map {
             info,
             abstract_size,
             world_size,
             cells,
             objects: vec![],
-        })
+        };
+
+        let mut cells = Vec::new();
+
+        for cell_row in map.cells.iter() {
+            let mut row = Vec::new();
+            for cell in cell_row.clone().iter() {
+                let mut new_cell = (*cell).clone();
+                new_cell.put_in_map(&map);
+                row.push(new_cell);
+            }
+            cells.push(row);
+        }
+
+        map.cells = cells;
+
+        Ok(map)
     }
 
     pub const fn north(&self) -> f64 {
@@ -162,7 +170,7 @@ impl Map {
         )
     }
 
-    pub fn cell_world_pos(&self, (row, col): (usize, usize)) -> Vector3<f64> {
+    pub fn cell_world_pos(&self, (row, col): (usize, usize)) -> Point3<f64> {
         self.cells[row][col].corner_world_position()
     }
 }

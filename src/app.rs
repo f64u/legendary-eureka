@@ -1,13 +1,10 @@
 use std::sync::Arc;
 
-use nalgebra::{OPoint, Point3, Vector3};
-
 use vulkano::{
     buffer::{BufferUsage, CpuAccessibleBuffer, TypedBufferAccess},
     command_buffer::{
-        allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder,
-        CommandBufferInheritanceInfo, CommandBufferUsage, RenderPassBeginInfo, RenderingInfo,
-        SubpassContents,
+        allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage,
+        RenderPassBeginInfo, SubpassContents,
     },
     descriptor_set::{
         allocator::StandardDescriptorSetAllocator, PersistentDescriptorSet, WriteDescriptorSet,
@@ -33,7 +30,7 @@ use vulkano::{
 use winit::window::Window;
 
 use crate::{
-    camera::Camera,
+    camera::{Camera, Frustum},
     cell::{chunk::HFVertex, tile::Tile},
     map::Map,
     window_state::WindowState,
@@ -97,6 +94,7 @@ pub struct App {
     pub viewport: Viewport,
     pub command_buffer_allocator: StandardCommandBufferAllocator,
     pub descriptor_set_allocator: StandardDescriptorSetAllocator,
+    pub memory_allocator: GenericMemoryAllocator<Arc<FreeListAllocator>>,
     pub descriptor_set: Arc<PersistentDescriptorSet>,
     pub world_uniform_buffer: Arc<CpuAccessibleBuffer<vs::ty::WorldObject>>,
     pub camera: Camera,
@@ -112,9 +110,12 @@ impl Situation {
     fn new(
         memory_allocator: &GenericMemoryAllocator<Arc<FreeListAllocator>>,
         tiles: Vec<&Tile>,
+        camera: &Camera,
     ) -> Self {
+        let frustum = camera.frustum();
         let chunks = tiles
             .into_iter()
+            .filter(|tile| dbg!(frustum.intersects(tile.bbox.as_ref().unwrap())))
             .map(|tile| &tile.chunk)
             .collect::<Vec<_>>();
 
@@ -258,7 +259,11 @@ impl App {
         )
         .unwrap();
 
-        let situation = Situation::new(&memory_allocator, map.cells[0][0].lod.items_at_level(0));
+        let situation = Situation::new(
+            &memory_allocator,
+            map.cells[0][0].lod.items_at_level(1),
+            &camera,
+        );
 
         Self {
             map,
@@ -270,6 +275,7 @@ impl App {
             viewport,
             command_buffer_allocator,
             descriptor_set_allocator,
+            memory_allocator,
             descriptor_set,
             world_uniform_buffer,
             camera,
@@ -277,10 +283,16 @@ impl App {
         }
     }
 
-    pub fn reupload_world_data(&self) {
+    pub fn camera_updated(&mut self) {
         if let Ok(mut world) = self.world_uniform_buffer.write() {
             *world = self.camera.world_object(self.map.scale())
         }
+
+        self.situation = Situation::new(
+            &self.memory_allocator,
+            self.map.cells[0][0].lod.items_at_level(1),
+            &self.camera,
+        )
     }
 
     pub fn recreate_swapchain(&mut self) {

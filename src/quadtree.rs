@@ -1,6 +1,4 @@
-use std::ops::Index;
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum QuadTree<T>
 where
     T: Clone,
@@ -9,7 +7,7 @@ where
     Node(T, Box<Children<T>>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Children<T>
 where
     T: Clone,
@@ -61,7 +59,8 @@ impl<T: Clone> QuadTree<T> {
             QuadTree::Leaf(v) => {
                 flattened.push(v);
             }
-            QuadTree::Node(_, q) => {
+            QuadTree::Node(e, q) => {
+                flattened.push(e);
                 let Children { nw, ne, se, sw, .. } = q.as_mut();
                 for t in [nw, ne, se, sw] {
                     flattened.extend(t.mut_view());
@@ -77,7 +76,7 @@ impl<T: Clone> QuadTree<T> {
         match self {
             QuadTree::Leaf(e) => {
                 if level != 0 {
-                    panic!("The only available level is 0")
+                    panic!("not enough levels")
                 }
                 items.push(e)
             }
@@ -98,13 +97,6 @@ impl<T: Clone> QuadTree<T> {
         }
 
         items
-    }
-
-    pub fn unwrap(&self) -> &T {
-        match self {
-            QuadTree::Leaf(e) => e,
-            QuadTree::Node(e, _) => e,
-        }
     }
 }
 
@@ -140,5 +132,15 @@ mod test {
                 .collect::<Vec<_>>(),
             (5..21).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn mut_view() {
+        let mut q = QuadTree::build_complete_tree((0..21).collect(), 3);
+        let view = q.mut_view();
+        for i in view {
+            *i += 1;
+        }
+        assert_eq!(dbg!(q).items_at_level(0), vec![&1])
     }
 }

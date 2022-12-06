@@ -1,11 +1,18 @@
 use bytemuck::{Pod, Zeroable};
 use nalgebra::{Matrix4, OPoint, Perspective3, Point3, Vector3};
 
-use crate::app::vs;
+use crate::{aabb::AABB, app::vs};
 
+#[derive(Debug)]
 pub struct Plane {
     normal: Vector3<f64>,
-    distance: f64,
+    point: Point3<f64>,
+}
+
+impl Plane {
+    fn distance(&self, point: &Point3<f64>) -> f64 {
+        self.normal.dot(&(point - self.point))
+    }
 }
 
 pub struct Frustum {
@@ -21,46 +28,60 @@ pub struct Frustum {
 
 impl Frustum {
     fn new(camera: &Camera) -> Self {
-        let half_v_side = camera.far_z * (camera.fov.to_radians() * 0.5).tan();
+        let half_v_side = camera.far_z * (camera.fov * 0.5).to_radians().tan();
         let half_h_side = half_v_side * camera.asepect_ratio;
         let front_mult_far = camera.far_z * camera.front();
-
-        let origin = Point3::new(0.0, 0.0, 0.0);
-        let distance = nalgebra::distance(&camera.pos, &origin);
 
         Self {
             near_face: Plane {
                 normal: camera.front(),
-                distance: nalgebra::distance(
-                    &(camera.pos + camera.near_z * camera.front()),
-                    &origin,
-                ),
+                point: camera.pos + camera.near_z * camera.front(),
             },
             far_face: Plane {
                 normal: -camera.front(),
-                distance: nalgebra::distance(&(camera.pos + front_mult_far), &origin),
+                point: camera.pos + front_mult_far,
             },
             right_face: Plane {
                 normal: camera
                     .up()
                     .cross(&(front_mult_far + camera.right() * half_h_side)),
-                distance,
+                point: camera.pos,
             },
             left_face: Plane {
                 normal: (front_mult_far - camera.right() * half_h_side).cross(&camera.up()),
-                distance,
+                point: camera.pos,
             },
             top_face: Plane {
                 normal: camera
                     .right()
                     .cross(&(front_mult_far - camera.right() * half_v_side)),
-                distance,
+                point: camera.pos,
             },
             bottom_face: Plane {
                 normal: (front_mult_far + camera.up() * half_v_side).cross(&camera.right()),
-                distance,
+                point: camera.pos,
             },
         }
+    }
+
+    pub fn intersects(&self, abox: &AABB<f64>) -> bool {
+        let planes = [
+            &self.far_face,
+            &self.near_face,
+            &self.top_face,
+            &self.bottom_face,
+            &self.right_face,
+            &self.left_face,
+        ];
+
+        for plane in planes {
+            let d = plane.distance(&abox.get_vertex_p(plane.normal));
+            if d < 0.0 {
+                return false;
+            }
+        }
+
+        true
     }
 }
 
@@ -108,7 +129,6 @@ impl Camera {
     }
 
     pub const fn stride(&self) -> f64 {
-        //Self::STRIDE_FACTOR * (self.pos - self.target).norm().abs()
         50.0
     }
 
@@ -150,12 +170,12 @@ impl Camera {
     }
 
     pub fn set_fov(&mut self, degrees: f64) {
-        self.fov = degrees.to_radians();
+        self.fov = degrees;
         self.recompute_error_factor()
     }
 
     fn recompute_error_factor(&mut self) {
-        self.error_factor = self.width as f64 / (2.0 * (self.fov / 2.0).tan())
+        self.error_factor = self.width as f64 / (2.0 * (self.fov * 0.5).to_radians().tan())
     }
 
     pub fn set_near_and_far(&mut self, near_z: f64, far_z: f64) {

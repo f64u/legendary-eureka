@@ -66,7 +66,7 @@ impl Header {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TexturedQuadTree {
     pub lod: QuadTree<Tile>,
     pub depth: u32,
