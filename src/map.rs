@@ -1,6 +1,6 @@
 use std::{fs::File, io::BufReader, path::Path, vec};
 
-use nalgebra::{Point3, Vector3};
+use nalgebra::Point3;
 use serde::Deserialize;
 
 use crate::{cell::Cell, disk_util::interlace_alpha, texture_quadtree::TexturedQuadTree};

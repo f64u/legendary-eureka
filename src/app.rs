@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use nalgebra::{ComplexField, Vector, Vector3};
 use vulkano::{
     buffer::{BufferUsage, CpuAccessibleBuffer, TypedBufferAccess},
     command_buffer::{
@@ -16,7 +15,7 @@ use vulkano::{
     pipeline::{
         graphics::{
             input_assembly::{InputAssemblyState, PrimitiveTopology},
-            rasterization::{PolygonMode, RasterizationState},
+            rasterization::RasterizationState,
             vertex_input::BuffersDefinition,
             viewport::{Viewport, ViewportState},
         },
@@ -124,7 +123,7 @@ impl Situation {
         memory_allocator: &GenericMemoryAllocator<Arc<FreeListAllocator>>,
         tiles: Vec<&Tile>,
         images: Vec<Arc<ImageView<ImmutableImage>>>,
-        camera: &Camera,
+        _camera: &Camera,
     ) -> Self {
         // let frustum = dbg!(dbg!(camera).frustum());
         let level = tiles[0].level;

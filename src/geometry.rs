@@ -199,7 +199,7 @@ impl Frustum {
 
         let mut intersect = false;
 
-        for (i, plane) in planes.iter().enumerate() {
+        for (_i, plane) in planes.iter().enumerate() {
             let a = plane.distance(&abox.get_vertex_p(&plane.normal));
             let b = plane.distance(&abox.get_vertex_n(&plane.normal));
             if a < 0.0 {
