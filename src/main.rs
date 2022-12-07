@@ -1,10 +1,10 @@
 use std::sync::Arc;
 mod camera;
 
-mod aabb;
 mod app;
 mod cell;
 mod disk_util;
+mod geometry;
 mod map;
 mod quadtree;
 mod texture_quadtree;

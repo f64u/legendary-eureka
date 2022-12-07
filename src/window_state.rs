@@ -58,6 +58,7 @@ impl WindowState {
     ) -> (Arc<Device>, Arc<Queue>) {
         let device_extensions = DeviceExtensions {
             khr_swapchain: true,
+            khr_push_descriptor: true,
             ..Default::default()
         };
 

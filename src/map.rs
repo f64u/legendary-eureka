@@ -3,7 +3,7 @@ use std::{fs::File, io::BufReader, path::Path, vec};
 use nalgebra::{Point3, Vector3};
 use serde::Deserialize;
 
-use crate::{cell::Cell, texture_quadtree::TexturedQuadTree};
+use crate::{cell::Cell, disk_util::interlace_alpha, texture_quadtree::TexturedQuadTree};
 
 #[derive(Debug, Deserialize)]
 pub struct MapInfo {
@@ -87,10 +87,15 @@ impl Map {
                 let grid_name = &info.grid[idx as usize];
                 let cell_dir = map_dir.as_ref().join(grid_name);
                 let color_tqt = if info.has_color {
-                    Some(TexturedQuadTree::new(cell_dir.join("color.tqt"))?)
+                    let mut tree = TexturedQuadTree::new(cell_dir.join("color.tqt"))?;
+                    for image in tree.lod.mut_view() {
+                        interlace_alpha(&mut image.image)
+                    }
+                    Some(tree)
                 } else {
                     None
                 };
+
                 let normal_tqt = if info.has_normals {
                     Some(TexturedQuadTree::new(cell_dir.join("norm.tqt"))?)
                 } else {
@@ -199,6 +204,6 @@ mod test {
     #[test]
     fn testing() {
         let m1 = Map::new("maps/test-map2/map.json").unwrap();
-        println!("{:?}", m1.cells[0][0].lod.items_at_level(0)[0].chunk)
+        println!("{:?}", m1.cells[0][0].tree.items_at_level(0)[0].chunk)
     }
 }

@@ -8,11 +8,12 @@ use crate::quadtree::{util::full_size, QuadTree};
 use crate::{disk_util::read_value, quadtree::util::node_index};
 
 #[derive(Debug, Clone)]
-pub struct Tile {
+pub struct Texture {
     pub image: Vec<u8>,
+    pub size: u32,
 }
 
-impl Tile {
+impl Texture {
     fn read_from<R: Seek + Read>(
         reader: &mut BufReader<R>,
         tile_size: u32,
@@ -33,7 +34,10 @@ impl Tile {
             return Err("Invalid tile size??");
         }
 
-        Ok(Self { image })
+        Ok(Self {
+            image,
+            size: tile_size,
+        })
     }
 }
 
@@ -68,12 +72,12 @@ impl Header {
 
 #[derive(Debug, Clone)]
 pub struct TexturedQuadTree {
-    pub lod: QuadTree<Tile>,
+    pub lod: QuadTree<Texture>,
     pub depth: u32,
     pub tile_size: u32,
 }
 
-impl QuadTree<Tile> {
+impl QuadTree<Texture> {
     fn read_from<R: Read + Seek>(
         reader: &mut BufReader<R>,
         depth: u32,
@@ -86,7 +90,7 @@ impl QuadTree<Tile> {
             let n = 2usize.pow(level);
             for row in 0..n as u32 {
                 for col in 0..n as u32 {
-                    tiles.push(Tile::read_from(
+                    tiles.push(Texture::read_from(
                         reader,
                         tile_size,
                         offsets[node_index(level, row, col) as usize],
@@ -129,7 +133,7 @@ impl TexturedQuadTree {
             read_value(&mut reader, &mut offsets[i], "Unable to read offset")?;
         }
 
-        let lod = QuadTree::<Tile>::read_from(&mut reader, depth, tile_size, &offsets)?;
+        let lod = QuadTree::<Texture>::read_from(&mut reader, depth, tile_size, &offsets)?;
 
         Ok(Self {
             lod,

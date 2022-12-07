@@ -1,89 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 use nalgebra::{Matrix4, OPoint, Perspective3, Point3, Vector3};
 
-use crate::{aabb::AABB, app::vs};
-
-#[derive(Debug)]
-pub struct Plane {
-    normal: Vector3<f64>,
-    point: Point3<f64>,
-}
-
-impl Plane {
-    fn distance(&self, point: &Point3<f64>) -> f64 {
-        self.normal.dot(&(point - self.point))
-    }
-}
-
-pub struct Frustum {
-    pub top_face: Plane,
-    pub bottom_face: Plane,
-
-    pub left_face: Plane,
-    pub right_face: Plane,
-
-    pub near_face: Plane,
-    pub far_face: Plane,
-}
-
-impl Frustum {
-    fn new(camera: &Camera) -> Self {
-        let half_v_side = camera.far_z * (camera.fov * 0.5).to_radians().tan();
-        let half_h_side = half_v_side * camera.asepect_ratio;
-        let front_mult_far = camera.far_z * camera.front();
-
-        Self {
-            near_face: Plane {
-                normal: camera.front(),
-                point: camera.pos + camera.near_z * camera.front(),
-            },
-            far_face: Plane {
-                normal: -camera.front(),
-                point: camera.pos + front_mult_far,
-            },
-            right_face: Plane {
-                normal: camera
-                    .up()
-                    .cross(&(front_mult_far + camera.right() * half_h_side)),
-                point: camera.pos,
-            },
-            left_face: Plane {
-                normal: (front_mult_far - camera.right() * half_h_side).cross(&camera.up()),
-                point: camera.pos,
-            },
-            top_face: Plane {
-                normal: camera
-                    .right()
-                    .cross(&(front_mult_far - camera.right() * half_v_side)),
-                point: camera.pos,
-            },
-            bottom_face: Plane {
-                normal: (front_mult_far + camera.up() * half_v_side).cross(&camera.right()),
-                point: camera.pos,
-            },
-        }
-    }
-
-    pub fn intersects(&self, abox: &AABB<f64>) -> bool {
-        let planes = [
-            &self.far_face,
-            &self.near_face,
-            &self.top_face,
-            &self.bottom_face,
-            &self.right_face,
-            &self.left_face,
-        ];
-
-        for plane in planes {
-            let d = plane.distance(&abox.get_vertex_p(plane.normal));
-            if d < 0.0 {
-                return false;
-            }
-        }
-
-        true
-    }
-}
+use crate::{app::vs, geometry::Frustum};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Zeroable, Pod)]
@@ -102,10 +20,10 @@ pub struct Camera {
 impl Default for Camera {
     fn default() -> Self {
         Camera {
-            pos: Point3::new(500.0, 50.0, 500.0),
+            pos: Point3::new(550.0, 50.0, 550.0),
             target: OPoint::origin() + -Vector3::z(),
             up: -Vector3::y(),
-            near_z: 0.1,
+            near_z: 1.0,
             far_z: 10000.0,
             asepect_ratio: 16.0 / 9.0,
             fov: 60.0,
@@ -196,10 +114,6 @@ impl Camera {
         self.target += dir; // correct target
     }
 
-    pub fn look_at(&mut self, target: Point3<f64>) {
-        self.target = target;
-    }
-
     pub fn make_up(&mut self, up: Vector3<f64>) {
         self.up = up.normalize();
     }
@@ -231,7 +145,7 @@ impl Camera {
     }
 
     pub fn move_down(&mut self) {
-        self.shift_by(self.stride() * self.up.normalize())
+        self.shift_by(self.stride() * self.up())
     }
 
     pub fn move_forward(&mut self) {
@@ -251,19 +165,19 @@ impl Camera {
 
     pub fn rotate_ccw_vertically(&mut self) {
         self.target += self.angle_d() * self.up();
-        self.up = self.right().cross(&self.front());
+        self.make_up(self.right().cross(&self.front()));
     }
     pub fn rotate_cw_vertically(&mut self) {
         self.target -= self.angle_d() * self.up();
-        self.up = self.right().cross(&self.front()).normalize();
+        self.make_up(self.right().cross(&self.front()));
     }
 
     pub fn rotate_ccw_sideways(&mut self) {
         let rot = nalgebra::Rotation3::new(-self.front() * self.angle_d().to_radians() * 0.2);
-        self.up = (rot * self.up).normalize();
+        self.make_up(rot * self.up);
     }
     pub fn rotate_cw_sideways(&mut self) {
         let rot = nalgebra::Rotation3::new(self.front() * self.angle_d().to_radians() * 0.2);
-        self.up = (rot * self.up).normalize();
+        self.make_up(rot * self.up);
     }
 }

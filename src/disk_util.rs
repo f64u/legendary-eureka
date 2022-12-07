@@ -29,3 +29,12 @@ pub fn read_value<'a, const N: usize, R: Read, T: ReadableFromBytes<N>>(
     *into = T::read(buffer);
     Ok(())
 }
+
+pub fn interlace_alpha(image: &mut Vec<u8>) {
+    *image = image
+        .chunks_exact(3)
+        .map(|chunk| chunk.iter().chain(&[255]))
+        .flatten()
+        .copied()
+        .collect();
+}

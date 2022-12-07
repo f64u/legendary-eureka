@@ -45,9 +45,7 @@ impl CellHeader {
 pub struct Cell {
     pub position: (u32, u32),
     pub depth: u32,
-    pub lod: QuadTree<tile::Tile>,
-    pub color_tqt: Option<TexturedQuadTree>,
-    pub normal_tqt: Option<TexturedQuadTree>,
+    pub tree: QuadTree<tile::Tile>,
 
     pub worldly_width: Option<f64>,
 }
@@ -96,14 +94,29 @@ impl Cell {
             read_value(&mut reader, &mut offsets[i], "Unable to read offset")?;
         }
 
-        let lod = QuadTree::read_from(&mut reader, depth, &offsets)?;
+        let mut lod = QuadTree::read_from(&mut reader, depth, cell_width, &offsets)?;
+
+        if let Some(mut textures) = color_tqt {
+            for (tile, texture) in lod
+                .mut_view()
+                .iter_mut()
+                .zip(textures.lod.mut_view().iter())
+            {
+                tile.texture = Some((*texture).clone());
+            }
+        }
+
+        if let Some(mut normals) = normal_tqt {
+            for (tile, normal) in lod.mut_view().iter_mut().zip(normals.lod.mut_view().iter()) {
+                tile.normals = Some((*normal).clone());
+            }
+        }
 
         Ok(Self {
             position,
             depth,
-            lod,
-            color_tqt,
-            normal_tqt,
+            tree: lod,
+
             worldly_width: None,
         })
     }
@@ -117,7 +130,7 @@ impl Cell {
 
         let pos = self.corner_world_position();
 
-        for tile in self.lod.mut_view() {
+        for tile in self.tree.mut_view() {
             tile.put_in_map_in_cell(pos, map);
         }
     }
@@ -141,12 +154,13 @@ pub mod tile {
     use nalgebra::{Point3, Vector3};
 
     use crate::{
-        aabb::AABB,
+        geometry::AABB,
         map::Map,
         quadtree::{
             util::{full_size, node_index},
             QuadTree,
         },
+        texture_quadtree::Texture,
     };
 
     use super::chunk::Chunk;
@@ -156,6 +170,10 @@ pub mod tile {
         pub chunk: Chunk,
         pub position: (u32, u32),
         pub level: u32,
+        pub size: u32,
+
+        pub texture: Option<Texture>,
+        pub normals: Option<Texture>,
 
         /// Set when put in map
         pub bbox: Option<AABB<f64>>,
@@ -190,6 +208,7 @@ pub mod tile {
         pub fn read_from<R: Read + Seek>(
             reader: &mut BufReader<R>,
             depth: u32,
+            cell_size: u32,
             offsets: &[u64],
         ) -> Result<Self, &'static str> {
             let mut tiles = Vec::with_capacity(full_size(depth) as usize);
@@ -208,7 +227,10 @@ pub mod tile {
                             chunk,
                             position: (row, col),
                             level,
+                            size: cell_size >> level,
                             bbox: None,
+                            texture: None,
+                            normals: None,
                         });
                     }
                 }
@@ -232,17 +254,19 @@ pub mod chunk {
     pub struct HFVertex {
         pub position: [f32; 3],
         pub color: [f32; 3],
+        pub txt_coord: [f32; 2],
         pub morph_delta: f32,
     }
 
-    impl_vertex!(HFVertex, position, color, morph_delta);
+    impl_vertex!(HFVertex, position, color, txt_coord, morph_delta);
 
     impl HFVertex {
-        pub fn with_color(&self, color: [f32; 3]) -> Self {
+        pub fn with_color_and_coords(&self, color: [f32; 3], coords: [f32; 2]) -> Self {
             Self {
                 position: self.position,
-                morph_delta: self.morph_delta,
                 color,
+                txt_coord: coords,
+                morph_delta: self.morph_delta,
             }
         }
 
@@ -265,6 +289,7 @@ pub mod chunk {
                 position: [x as f32, y as f32, z as f32],
                 morph_delta: morph_delta as f32,
                 color: [1.0, 0.0, 0.0],
+                txt_coord: [0.0; 2],
             })
         }
     }
