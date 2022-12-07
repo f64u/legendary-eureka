@@ -83,11 +83,14 @@ mod fs {
         layout(location = 1) in vec2 txt_coord;
 
         layout(location = 0) out vec4 f_color;
+        //layout(location = 1) out vec4 t_color;
 
         layout(set = 1, binding = 0) uniform sampler2D tex;
 
         void main() {
             f_color = texture(tex, txt_coord);
+            // f_color = vec4(v_color, 1.0);
+            //t_color = texture(tex, txt_coord);
         }
     "
     }
@@ -267,7 +270,7 @@ impl App {
                 ..Default::default()
             })
             .rasterization_state(RasterizationState {
-                //  polygon_mode: PolygonMode::Line,
+                // polygon_mode: PolygonMode::Line,
                 ..Default::default()
             })
             .with_auto_layout(window_state.device.clone(), |layout_create_infos| {
@@ -287,7 +290,7 @@ impl App {
         .unwrap();
 
         let cell = &map.cells[0][0];
-        let tiles = cell.tree.items_at_level(1);
+        let tiles = cell.tree.items_at_level(0);
 
         let images = tiles
             .iter()
