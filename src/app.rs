@@ -15,7 +15,7 @@ use vulkano::{
     pipeline::{
         graphics::{
             input_assembly::{InputAssemblyState, PrimitiveTopology},
-            rasterization::RasterizationState,
+            rasterization::{PolygonMode, RasterizationState},
             vertex_input::BuffersDefinition,
             viewport::{Viewport, ViewportState},
         },
@@ -88,30 +88,48 @@ mod fs {
 
         void main() {
             f_color = texture(tex, txt_coord);
-            // f_color = vec4(v_color, 1.0);
+            f_color = vec4(v_color, 1.0);
             //t_color = texture(tex, txt_coord);
         }
     "
     }
 }
 
+/// The app during runtime
 pub struct App {
+    /// The map that was fed as command argument
     pub map: Map,
+    /// The current window and vulkan state
     pub window_state: WindowState,
+    /// A GpuFuture representing when the past frame ended
     pub previous_frame_end: Option<Box<dyn GpuFuture>>,
+    /// Render pass object
     pub render_pass: Arc<RenderPass>,
+    /// Pipeline object
     pub pipeline: Arc<GraphicsPipeline>,
+    /// The available framebuffers
     pub framebuffers: Vec<Arc<Framebuffer>>,
+    /// Current viewport information
     pub viewport: Viewport,
+    /// Allocator for command buffers; used in the constructor and elsewhere
     pub command_buffer_allocator: StandardCommandBufferAllocator,
+    /// Allocator for the descriptor sets; used in the constructor and elsewhere
     pub descriptor_set_allocator: StandardDescriptorSetAllocator,
+    /// Memory allocator for buffers
     pub memory_allocator: GenericMemoryAllocator<Arc<FreeListAllocator>>,
+    /// The descriptor set that we needed; This field would change if additional
+    /// modes were to be added.
     pub descriptor_set: Arc<PersistentDescriptorSet>,
+    /// The world buffer
     pub world_uniform_buffer: Arc<CpuAccessibleBuffer<vs::ty::WorldObject>>,
+    /// The camera object, representing orientaiton and position of camera in the world
     pub camera: Camera,
+    /// The object tracking the LODs; incomplete
     pub situation: Situation,
 }
 
+/// The vertex buffers, index buffers, and textures associated with
+/// what is going to be drawn.
 pub struct Situation {
     vertex_buffers: Vec<Arc<CpuAccessibleBuffer<[HFVertex]>>>,
     index_buffers: Vec<Arc<CpuAccessibleBuffer<[u16]>>>,
@@ -269,7 +287,7 @@ impl App {
                 ..Default::default()
             })
             .rasterization_state(RasterizationState {
-                // polygon_mode: PolygonMode::Line,
+                polygon_mode: PolygonMode::Line,
                 ..Default::default()
             })
             .with_auto_layout(window_state.device.clone(), |layout_create_infos| {
@@ -362,6 +380,7 @@ impl App {
         }
     }
 
+    /// Signal that the camera has been updated
     pub fn camera_updated(&mut self) {
         if let Ok(mut world) = self.world_uniform_buffer.write() {
             *world = self.camera.world_object(self.map.scale())
