@@ -1,3 +1,5 @@
+/// A quad tree either is a leaf or a node with a value
+/// and four children
 #[derive(Debug, Clone)]
 pub enum QuadTree<T>
 where
@@ -7,6 +9,8 @@ where
     Node(T, Box<Children<T>>),
 }
 
+/// The four children of a node of a quad tree are
+/// quadtrees
 #[derive(Debug, Clone)]
 pub struct Children<T>
 where
@@ -21,6 +25,8 @@ where
 }
 
 impl<T: Clone> QuadTree<T> {
+    /// Go from a flat represention of a quadtree to
+    /// pointer form
     pub fn build_complete_tree(elements: Vec<T>, depth: u32) -> Self {
         let n = util::full_size(depth) as usize;
         assert_eq!(elements.len(), n);
@@ -28,6 +34,8 @@ impl<T: Clone> QuadTree<T> {
         Self::build_node(&elements, 0, 0, depth)
     }
 
+    /// Given all the elements, build the node at a given index at given level for the full
+    /// depth of depth
     fn build_node(all_elements: &[T], index: usize, level: u32, depth: u32) -> Self {
         if level == depth - 1 {
             return Self::Leaf(all_elements[index].clone());
@@ -53,6 +61,7 @@ impl<T: Clone> QuadTree<T> {
         }
     }
 
+    /// Return mutable access to the inside of the tree elements
     pub fn mut_view(&mut self) -> Vec<&mut T> {
         let mut flattened = Vec::with_capacity(util::full_size(self.depth()) as usize);
         match self {
@@ -70,6 +79,7 @@ impl<T: Clone> QuadTree<T> {
         flattened
     }
 
+    /// Get all the elements at a given level of the tree
     pub fn items_at_level(&self, level: u32) -> Vec<&T> {
         let mut items = Vec::with_capacity(4usize.pow(level));
 

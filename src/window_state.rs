@@ -16,12 +16,19 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
+/// Responsible for tracking the vulkan and window states
 pub struct WindowState {
+    /// The vulkan instance
     pub instance: Arc<Instance>,
+    /// The vulkan logical device
     pub device: Arc<Device>,
+    /// The graphics/presentation queue
     pub queue: Arc<Queue>,
+    /// The vulkan surface of the window
     pub surface: Arc<Surface>,
+    /// The vulkan swapchain
     pub swapchain: Arc<Swapchain>,
+    /// The available swapchain images
     pub swapchain_images: Vec<Arc<SwapchainImage>>,
 }
 
@@ -151,6 +158,7 @@ impl WindowState {
         .unwrap()
     }
 
+    /// Creates the window state given its title
     pub fn create(title: String) -> (Self, EventLoop<()>) {
         let event_loop = EventLoop::new();
         let instance = Self::create_vulkan_instance();

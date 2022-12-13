@@ -5,12 +5,14 @@ use num_traits::Float;
 
 use crate::camera::Camera;
 
+/// Returned by intersection tests
 pub enum IntersectionStatus {
     Outside,
     Intersecting,
     Inside,
 }
 
+/// The Axis-Aligned Bounding Box struct
 #[derive(Debug, Clone)]
 pub struct AABB<T: Float + Scalar> {
     pub min: Point3<T>,
@@ -25,6 +27,7 @@ where
         Self { min, max }
     }
 
+    /// Get the positive vertex (on the side of the plane) given a normal
     pub fn get_vertex_p(&self, normal: &Vector3<T>) -> Point3<T> {
         let mut p = self.min;
         if normal.x >= T::default() {
@@ -42,6 +45,7 @@ where
         p
     }
 
+    /// Get hte negative vertex (on the opposite side of the plane) given a normal
     pub fn get_vertex_n(&self, normal: &Vector3<T>) -> Point3<T> {
         let mut p = self.max;
         if normal.x >= T::default() {
@@ -117,6 +121,7 @@ where
     }
 }
 
+/// A plane in space
 #[derive(Debug)]
 pub struct Plane {
     normal: Vector3<f64>,
@@ -142,6 +147,7 @@ pub struct Frustum {
 }
 
 impl Frustum {
+    /// Make a view frustum given the current camera status
     pub fn new(camera: &Camera) -> Self {
         let half_h_side = camera.far_z * (camera.fov * 0.5).to_radians().tan();
         let half_v_side = half_h_side * camera.asepect_ratio;
@@ -187,6 +193,9 @@ impl Frustum {
         }
     }
 
+    /// Does the frustum intersect a bounding box?
+    /// I spent way too long trying to get this logic right. Didn't
+    /// succeed.
     pub fn intersect(&self, abox: &AABB<f64>) -> IntersectionStatus {
         let planes = [
             &self.far_face,

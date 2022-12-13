@@ -100,6 +100,8 @@ fn main() {
             }
 
             app.previous_frame_end.as_mut().unwrap().cleanup_finished();
+
+            // This shouldn't happen that often
             app.camera_updated();
         }
 

@@ -7,6 +7,7 @@ use std::{
 use crate::quadtree::{util::full_size, QuadTree};
 use crate::{disk_util::read_value, quadtree::util::node_index};
 
+/// A texture is the flat image and supriously its size
 #[derive(Debug, Clone)]
 pub struct Texture {
     pub image: Vec<u8>,
@@ -70,6 +71,7 @@ impl Header {
     }
 }
 
+/// A unique version of a quadtree that is for textures
 #[derive(Debug, Clone)]
 pub struct TexturedQuadTree {
     pub lod: QuadTree<Texture>,
